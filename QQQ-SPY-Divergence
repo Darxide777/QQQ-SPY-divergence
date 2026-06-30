@@ -1,50 +1,78 @@
 //@version=6
-indicator("QQQ vs SPY Divergence", overlay=false)
+indicator("QQQ vs SPY Relative Strength", overlay=false)
 
-// --- Data ---
+//---------------------------------------------------------
+// Data
+//---------------------------------------------------------
 qqq_c = request.security("NASDAQ:QQQ", "1", close)
-spy_c  = request.security("SPY",   "1", close)
-spy_h  = request.security("SPY",   "1", high)
-spy_l  = request.security("SPY",   "1", low)
+spy_c = request.security("AMEX:SPY", "1", close)
 
-// --- Session anchors ---
+//---------------------------------------------------------
+// Continuously track the first available prices
+//---------------------------------------------------------
 var float qqq_open = na
 var float spy_open = na
-var float orb_h    = na
-var float orb_l    = na
 
-is_930 = (hour == 9  and minute == 30)
-is_orb = (hour == 9  and minute >= 30 and minute <= 40)
+newDay = ta.change(time("D"))
 
-// Capture opening prices at 9:30
-if is_930
+if newDay
     qqq_open := qqq_c
-    spy_open  := spy_c
-    orb_h     := na      // reset each day
-    orb_l     := na
+    spy_open := spy_c
 
-// Build ORB range (9:30–9:40) as % from spy_open
-if is_orb and spy_open > 0
-    spy_h_pct = (spy_h - spy_open) / spy_open * 100
-    spy_l_pct = (spy_l - spy_open) / spy_open * 100
-    orb_h := na(orb_h) ? spy_h_pct : math.max(orb_h, spy_h_pct)
-    orb_l := na(orb_l) ? spy_l_pct : math.min(orb_l, spy_l_pct)
+// Initialize on the first loaded bar
+if na(qqq_open)
+    qqq_open := qqq_c
 
-// --- Divergence ---
-qqq_pct   = qqq_open > 0 ? (qqq_c - qqq_open) / qqq_open * 100 : na
-spy_pct   = spy_open > 0 ? (spy_c  - spy_open) / spy_open * 100 : na
-divergence = qqq_pct - spy_pct
+if na(spy_open)
+    spy_open := spy_c
 
-// --- Plots (must be at top scope) ---
-p1 = plot(qqq_pct,   color=color.new(color.aqua,   0), title="QQQ %",       linewidth=2)
-p2 = plot(spy_pct,   color=color.new(color.orange,  0), title="SPY %",       linewidth=2)
-p3 = plot(divergence, color=color.new(color.yellow, 0), title="Divergence",  linewidth=1)
+//---------------------------------------------------------
+// Percent change from today's first bar
+//---------------------------------------------------------
+qqq_pct = qqq_open > 0 ? (qqq_c - qqq_open) / qqq_open * 100 : na
+spy_pct = spy_open > 0 ? (spy_c - spy_open) / spy_open * 100 : na
 
-plot(orb_h, color=color.new(color.green, 60), title="ORB High", style=plot.style_stepline)
-plot(orb_l, color=color.new(color.red,   60), title="ORB Low",  style=plot.style_stepline)
+//---------------------------------------------------------
+// Relative Strength RSI
+//---------------------------------------------------------
+rsiLength = input.int(14, "RSI Length", minval=2)
 
-hline(0, color=color.gray, linestyle=hline.style_dashed)
+relativeStrength = qqq_pct - spy_pct
+divRSI = ta.rsi(relativeStrength, rsiLength)
 
-fill(p1, p2, color=divergence > 0
-     ? color.new(color.aqua,  85)
-     : color.new(color.orange, 85))
+// Scale RSI so it shares the same pane nicely.
+// RSI 50 = 0
+// RSI 70 = +2
+// RSI 30 = -2
+scaledRSI = (divRSI - 50) / 10
+
+//---------------------------------------------------------
+// Plots
+//---------------------------------------------------------
+pQQQ = plot(
+     qqq_pct,
+     title="QQQ %",
+     color=color.aqua,
+     linewidth=2)
+
+pSPY = plot(
+     spy_pct,
+     title="SPY %",
+     color=color.orange,
+     linewidth=2)
+
+plot(
+     scaledRSI,
+     title="Relative Strength RSI",
+     color=color.fuchsia,
+     linewidth=2)
+
+hline(0, "Zero", color=color.gray, linestyle=hline.style_dashed)
+
+fill(
+     pQQQ,
+     pSPY,
+     color = qqq_pct >= spy_pct
+          ? color.new(color.aqua, 85)
+          : color.new(color.orange, 85)
+)
