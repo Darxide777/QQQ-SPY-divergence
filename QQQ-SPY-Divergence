@@ -2,20 +2,19 @@
 indicator("QQQ vs SPY Relative Strength", overlay=false)
 
 //---------------------------------------------------------
-// Data
+// Data (always use 1-minute data)
 //---------------------------------------------------------
-qqq_c = request.security("NASDAQ:QQQ", "1", close)
-spy_c = request.security("AMEX:SPY", "1", close)
+qqq_c = request.security("NASDAQ:QQQ", "1", close, lookahead=barmerge.lookahead_off)
+spy_c = request.security("AMEX:SPY", "1", close, lookahead=barmerge.lookahead_off)
 
 //---------------------------------------------------------
-// Continuously track the first available prices
+// Daily reference prices
 //---------------------------------------------------------
 var float qqq_open = na
 var float spy_open = na
 
-newDay = ta.change(time("D"))
-
-if newDay
+// Reset at the first bar of each new day
+if ta.change(time("D")) != 0
     qqq_open := qqq_c
     spy_open := spy_c
 
@@ -27,7 +26,7 @@ if na(spy_open)
     spy_open := spy_c
 
 //---------------------------------------------------------
-// Percent change from today's first bar
+// Percent change from today's first available bar
 //---------------------------------------------------------
 qqq_pct = qqq_open > 0 ? (qqq_c - qqq_open) / qqq_open * 100 : na
 spy_pct = spy_open > 0 ? (spy_c - spy_open) / spy_open * 100 : na
@@ -40,7 +39,7 @@ rsiLength = input.int(14, "RSI Length", minval=2)
 relativeStrength = qqq_pct - spy_pct
 divRSI = ta.rsi(relativeStrength, rsiLength)
 
-// Scale RSI so it shares the same pane nicely.
+// Scale RSI to fit with the percentage lines
 // RSI 50 = 0
 // RSI 70 = +2
 // RSI 30 = -2
@@ -50,29 +49,29 @@ scaledRSI = (divRSI - 50) / 10
 // Plots
 //---------------------------------------------------------
 pQQQ = plot(
-     qqq_pct,
-     title="QQQ %",
-     color=color.aqua,
-     linewidth=2)
+    qqq_pct,
+    title="QQQ %",
+    color=color.aqua,
+    linewidth=2)
 
 pSPY = plot(
-     spy_pct,
-     title="SPY %",
-     color=color.orange,
-     linewidth=2)
+    spy_pct,
+    title="SPY %",
+    color=color.orange,
+    linewidth=2)
 
 plot(
-     scaledRSI,
-     title="Relative Strength RSI",
-     color=color.fuchsia,
-     linewidth=2)
+    scaledRSI,
+    title="Relative Strength RSI",
+    color=color.fuchsia,
+    linewidth=2)
 
 hline(0, "Zero", color=color.gray, linestyle=hline.style_dashed)
 
 fill(
-     pQQQ,
-     pSPY,
-     color = qqq_pct >= spy_pct
-          ? color.new(color.aqua, 85)
-          : color.new(color.orange, 85)
+    pQQQ,
+    pSPY,
+    color = qqq_pct >= spy_pct
+        ? color.new(color.aqua, 85)
+        : color.new(color.orange, 85)
 )
